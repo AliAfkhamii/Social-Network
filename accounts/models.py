@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.functional import lazy
 
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
@@ -88,7 +89,7 @@ class Profile(models.Model):
 
     links = models.ManyToManyField('Link', related_name='profiles', blank=True,
                                    verbose_name=_('links'))
-
+    private = models.BooleanField(default=False)
     uid = models.UUIDField(default=uuid.uuid4, unique=True, blank=True, verbose_name=_('unique id'))
 
     def __str__(self):
@@ -98,65 +99,83 @@ class Profile(models.Model):
     def likes(self):
         return self.likes_given
 
-    # @property
-    # def followers(self):
-    #     return self.followers
-    #
-    # @property
-    # def followings(self):
-    #     return self.followings
+    @property
+    def is_private(self):
+        return self.private
 
     def follow_requests(self):
         relations = self.followers
-        return relations.filter(state=relations.FollowState.REQUESTED)
+        return relations.filter(state=relations.RelationState.REQUESTED)
+
+    def block_list(self):
+        relations = self.followers
+        return relations.filter(state=relations.RelationState.BLOCKED)
+
+
+class BaseState:
+    BLOCKED = 'blc', 'blocked'
 
 
 class Relation(models.Model):
-    class FollowState(models.TextChoices):
-        REQUESTED = 'r', 'requested'
-        ACCEPTED = 'a', 'accepted'
-        DECLINED = 'd', 'declined'
+    class RelationState(BaseState, models.TextChoices):
+        FOLLOWED = 'flw', 'followed'
+
+    class PrivateRelationState(BaseState, models.TextChoices):
+        REQUESTED = 'req', 'requested'
+        ACCEPTED = 'acc', 'accepted'
 
     follower = models.ForeignKey('profile', on_delete=models.CASCADE, related_name='followings',
                                  verbose_name=_('follower'))
-    account = models.ForeignKey('profile', on_delete=models.CASCADE, related_name='followers',
+
+    account = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name='followers',
                                 verbose_name=_('following'))
 
-    state = models.CharField(max_length=9, choices=FollowState.choices, null=True, verbose_name=_('state'))
+    state = models.CharField(_('state'), max_length=3, null=True, choices=RelationState.choices)
 
     created = models.DateTimeField(auto_now_add=True, verbose_name=_('created'))
+
+    def __init__(self, *args, **kwargs):
+        super(Relation, self).__init__(*args, **kwargs)
+        if self._meta.get_field('account').private:
+            self._meta.get_field('state').choices = lazy(self.PrivateRelationState.choices, list)()
+
+    def __str__(self):
+        return f"{self.follower}-->{self.account}"
+
+    def _terminate_relation(self):
+        self.state = None
+
+    def request(self):
+        self.state = self.PrivateRelationState.REQUESTED
+        self.save()
+
+    def decline(self):
+        self._terminate_relation()
+
+    def accept(self):
+        self.state = self.PrivateRelationState.ACCEPTED
+        self.save()
+
+    def follow(self):
+        if self.state is None:
+            self.state = self.RelationState.FOLLOWED
+
+    def unfollow(self):
+        self._terminate_relation()
+
+    def block(self):
+        if self.account.is_private:
+            self.state = self.PrivateRelationState.BLOCKED
+        else:
+            self.state = self.RelationState.BLOCKED
+
+    def unblock(self):
+        self._terminate_relation()
 
     class Meta:
         verbose_name = _('Relation')
         verbose_name_plural = _('Relations')
         unique_together = (('follower', 'account'),)
-
-    def __str__(self):
-        return f"{self.follower}-->{self.account}"
-
-    def _request(self):
-        self.state = self.FollowState.REQUESTED
-        self.save()
-
-    def _accept(self):
-        self.state = self.FollowState.ACCEPTED
-        self.save()
-
-    def decline(self):
-        self.state = self.FollowState.DECLINED
-        self.save()
-
-    def follow(self):
-
-        if self.state == self.FollowState.REQUESTED:
-            self._accept()
-
-        elif self.state != self.FollowState.ACCEPTED:
-            self._request()
-
-    def unfollow(self):
-        self.state = None
-        self.save()
 
 
 class Link(models.Model):
