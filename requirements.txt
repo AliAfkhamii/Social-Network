@@ -1,0 +1,4 @@
+Django==3.2.5
+Pillow
+django-taggit
+django-rest-framework

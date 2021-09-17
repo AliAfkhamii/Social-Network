@@ -1,0 +1,20 @@
+from .models import IPAddress
+
+
+class IPAddressMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request, *args, **kwargs):
+        x_forwarded_for = request.Meta.get('HTTP_X_FORWARDED_FOR')
+
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+
+        ip_address = IPAddress.objects.get_or_create(ip=ip)
+        request.user.ip_address = ip_address
+
+        response = self.get_response(request)
+        return response
