@@ -66,8 +66,8 @@ class UserModel(PermissionsMixin, AbstractBaseUser):
     REQUIRED_FIELDS = ('username',)
 
     class Meta:
-        verbose_name = 'User'
-        verbose_name_plural = 'Users'
+        verbose_name = _('User')
+        verbose_name_plural = _('Users')
 
     def __str__(self):
         return self.username
@@ -97,7 +97,7 @@ class Profile(models.Model):
 
     @property
     def likes(self):
-        return self.likes_given
+        return self.likes_given.all()
 
     @property
     def is_private(self):
@@ -105,24 +105,29 @@ class Profile(models.Model):
 
     def follow_requests(self):
         relations = self.followers
-        return relations.filter(state=relations.RelationState.REQUESTED)
+        return relations.filter(state=relations.PrivateRelationState.REQUESTED)
 
     def block_list(self):
         relations = self.followers
-        return relations.filter(state=relations.RelationState.BLOCKED)
+        if self.is_private:
+            return relations.filter(state=Relation.PrivateRelationState.BLOCKED)
 
+        return relations.filter(state=Relation.PublicRelationState.BLOCKED)
 
-class BaseState:
-    BLOCKED = 'blc', 'blocked'
+    class Meta:
+        verbose_name = _('Profile')
+        verbose_name_plural = _('Profiles')
 
 
 class Relation(models.Model):
-    class RelationState(BaseState, models.TextChoices):
+    class PublicRelationState(models.TextChoices):
         FOLLOWED = 'flw', 'followed'
+        BLOCKED = 'blc', 'blocked'
 
-    class PrivateRelationState(BaseState, models.TextChoices):
+    class PrivateRelationState(models.TextChoices):
         REQUESTED = 'req', 'requested'
         ACCEPTED = 'acc', 'accepted'
+        BLOCKED = 'blc', 'blocked'
 
     follower = models.ForeignKey('profile', on_delete=models.CASCADE, related_name='followings',
                                  verbose_name=_('follower'))
@@ -130,30 +135,33 @@ class Relation(models.Model):
     account = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name='followers',
                                 verbose_name=_('following'))
 
-    state = models.CharField(_('state'), max_length=3, null=True, choices=RelationState.choices)
+    state = models.CharField(_('state'), max_length=3, null=True, choices=PublicRelationState.choices)
 
     created = models.DateTimeField(auto_now_add=True, verbose_name=_('created'))
 
     def __init__(self, *args, **kwargs):
         super(Relation, self).__init__(*args, **kwargs)
+        self.RelationState = self.PublicRelationState
+
         if self._meta.get_field('account').private:
-            self._meta.get_field('state').choices = lazy(self.PrivateRelationState.choices, list)()
+            self.RelationState = self.PrivateRelationState
+            self._meta.get_field('state').choices = lazy(self.RelationState.choices, list)()
 
     def __str__(self):
         return f"{self.follower}-->{self.account}"
 
     def _terminate_relation(self):
-        self.state = None
+        self.state = None  # or self.delete()
 
     def request(self):
-        self.state = self.PrivateRelationState.REQUESTED
+        self.state = self.RelationState.REQUESTED
         self.save()
 
     def decline(self):
         self._terminate_relation()
 
     def accept(self):
-        self.state = self.PrivateRelationState.ACCEPTED
+        self.state = self.RelationState.ACCEPTED
         self.save()
 
     def follow(self):
@@ -164,10 +172,7 @@ class Relation(models.Model):
         self._terminate_relation()
 
     def block(self):
-        if self.account.is_private:
-            self.state = self.PrivateRelationState.BLOCKED
-        else:
-            self.state = self.RelationState.BLOCKED
+        self.state = self.RelationState.BLOCKED
 
     def unblock(self):
         self._terminate_relation()
