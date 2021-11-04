@@ -32,6 +32,7 @@ class AdministrationUserChangeForm(forms.ModelForm):
                                                     "this user's password, but you can change the password "
                                                     "using <a href=\"../password/\">this form</a>.")
                                          )
+
     class Meta:
         model = User
         fields = '__all__'
