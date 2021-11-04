@@ -28,12 +28,13 @@ class UserRegistrationForm(forms.ModelForm):
 
 
 class AdministrationUserChangeForm(forms.ModelForm):
-    password = ReadOnlyPasswordHashField()
-
+    password = ReadOnlyPasswordHashField(help_text=("Raw passwords are not stored, so there is no way to see "
+                                                    "this user's password, but you can change the password "
+                                                    "using <a href=\"../password/\">this form</a>.")
+                                         )
     class Meta:
         model = User
         fields = '__all__'
-        exclude = ('password',)
 
     def clean_password(self):
-        return self.initial['password']
+        return self.initial.get('password')
