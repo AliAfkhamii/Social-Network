@@ -6,42 +6,44 @@ import uuid
 from django.utils import timezone
 from django.conf import settings
 
-from .utils import get_slug
+from . import utils
 
 
 class Post(models.Model):
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, related_name='posts',
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='posts',
                                verbose_name=_('author'))
-    title = models.CharField(max_length=256, blank=True, verbose_name=_('title'))
-    image = models.ImageField(blank=True, upload_to='post_images/', verbose_name=_('image'))
-    file = models.FileField(blank=True, verbose_name=_('File'))
+    title = models.CharField(max_length=256, verbose_name=_('title'))
+    image = models.ImageField(blank=True, null=True, upload_to='post_images/', verbose_name=_('image'))
+    file = models.FileField(blank=True, null=True, verbose_name=_('File'))
     slug = models.SlugField(null=True, blank=True, allow_unicode=True, verbose_name=_('slug'))
     content = models.TextField(verbose_name=_('content'))
     date_created = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('date created'))
     date_edited = models.DateTimeField(auto_now=True, editable=False, verbose_name=_('date edited'))
     post_tags = TaggableManager(blank=True, verbose_name=_('post tags'))
-    visits = models.ManyToManyField('IPAddress', related_name='posts_visited', verbose_name=_('views'))
+    visits = models.ManyToManyField('IPAddress', related_name='posts_visited', verbose_name=_('views'),
+                                    blank=True)
+
+    # def __init__(self, *args, **kwargs):
+    #     self.current_slug = self.slug if self.slug else None
+    #     super(Post, self).__init__(*args, **kwargs)
 
     class Meta:
         verbose_name = _('Post')
         verbose_name_plural = _('Posts')
         ordering = ('-date_created',)
 
-    @property
-    def likes(self):
-        return self.likes.all()
+    def get_tags(self):
+        return self.post_tags.names()
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            if self.title:
-                exists, to_slug = get_slug(self, self.title)
-                while exists:
-                    exists, to_slug = get_slug(self, self.title, uuid.uuid4())
-            else:
-                exists, to_slug = get_slug(self, self.author, uuid.uuid4())
-                while exists:
-                    exists, to_slug = get_slug(self, self.author, uuid.uuid4())
-            self.slug = to_slug
+            # get the field we want to slugify based on that
+            indicator = self.title if self.title else (self.title, self.author)
+            exists, to_slug = utils.get_slug(self, indicator)
+            while exists:
+                exists, to_slug = utils.get_slug(self, indicator, uuid.uuid4())
+            self.slug = self.current_slug = to_slug
+            self.save()
         super().save(*args, *kwargs)
 
     # def toggle_like(self, request):
@@ -73,7 +75,13 @@ class Post(models.Model):
 
 
 class LikeManager(models.Manager):
-    pass
+    def total_star_related_to_post(self, post_id):
+        from functools import reduce
+        from operator import add
+        related_post = Post.objects.get(id=post_id)
+        stars_list = self.filter(post=related_post).values_list('value', flat=True)
+        total = reduce(add, stars_list)
+        return total
 
 
 class Like(models.Model):
@@ -91,7 +99,7 @@ class Like(models.Model):
                                 verbose_name=_('profile liked'))
 
     created = models.DateTimeField(default=timezone.now, verbose_name=_('date created'))
-    value = models.IntegerField(choices=StarChoices.choices, blank=True, null=True, verbose_name=_('star'))
+    value = models.IntegerField(choices=StarChoices.choices, null=True, verbose_name=_('star'))
     objects = LikeManager()
 
     class Meta:
@@ -99,8 +107,11 @@ class Like(models.Model):
         verbose_name_plural = _('Likes')
         unique_together = (('post', 'profile'),)
 
+    def __str__(self):
+        return f"{self.profile} --> {self.post} | {self.value}"
+
     @classmethod
-    def toggle_like(cls, post, profile, star=None):
+    def toggle(cls, post, profile, star=None):
         try:
             like = cls.objects.get(post=post, profile=profile)
             if star:
@@ -109,9 +120,10 @@ class Like(models.Model):
             else:
                 like.delete()
         except Like.DoesNotExist:
-            cls.objects.create(
+            obj = cls.objects.create(
                 post=post, profile=profile, value=star
             )
+            return obj
 
 
 class Comment(models.Model):

@@ -104,15 +104,15 @@ class Profile(models.Model):
         return self.private
 
     def follow_requests(self):
-        relations = self.followers
-        return relations.filter(state=relations.PrivateRelationState.REQUESTED)
+        return self.followers.filter(state=Relation.RelationState.REQUESTED)
 
     def block_list(self):
-        relations = self.followers
-        if self.is_private:
-            return relations.filter(state=Relation.PrivateRelationState.BLOCKED)
+        return self.followers.filter(state=Relation.RelationState.BLOCKED)
 
-        return relations.filter(state=Relation.PublicRelationState.BLOCKED)
+    def change_state(self):
+        # profile_state_changed.send(sender=self.__class__, instance=self)
+        self.private = not self.private
+        self.save()
 
     class Meta:
         verbose_name = _('Profile')
@@ -120,35 +120,24 @@ class Profile(models.Model):
 
 
 class Relation(models.Model):
-    class PublicRelationState(models.TextChoices):
+    class RelationState(models.TextChoices):
         FOLLOWED = 'flw', 'followed'
         BLOCKED = 'blc', 'blocked'
-
-    class PrivateRelationState(models.TextChoices):
         REQUESTED = 'req', 'requested'
         ACCEPTED = 'acc', 'accepted'
-        BLOCKED = 'blc', 'blocked'
 
     follower = models.ForeignKey('profile', on_delete=models.CASCADE, related_name='followings',
                                  verbose_name=_('follower'))
 
     account = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name='followers',
-                                verbose_name=_('following'))
+                                verbose_name=_('account'))
 
-    state = models.CharField(_('state'), max_length=3, null=True, choices=PublicRelationState.choices)
+    state = models.CharField(_('state'), max_length=3, null=True, choices=RelationState.choices)
 
     created = models.DateTimeField(auto_now_add=True, verbose_name=_('created'))
 
-    def __init__(self, *args, **kwargs):
-        super(Relation, self).__init__(*args, **kwargs)
-        self.RelationState = self.PublicRelationState
-
-        if self._meta.get_field('account').private:
-            self.RelationState = self.PrivateRelationState
-            self._meta.get_field('state').choices = lazy(self.RelationState.choices, list)()
-
     def __str__(self):
-        return f"{self.follower}-->{self.account}"
+        return f"{self.follower}-->{self.account} - {self.state}"
 
     def _terminate_relation(self):
         self.state = None  # or self.delete()

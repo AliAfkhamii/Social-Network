@@ -1,7 +1,15 @@
-from django.dispatch import receiver
+from django.dispatch import receiver, Signal
 from django.db.models.signals import post_save, post_delete
 
 from .models import User, Profile
+
+# profile_state_changed = Signal()
+#
+#
+# @receiver(profile_state_changed, sender=Profile)
+# def apply_public_state_to_relations(sender, instance, *args, **kwargs):
+#     for rel in instance.followers.all():
+#         rel.change_type()
 
 
 @receiver(post_save, sender=User)
