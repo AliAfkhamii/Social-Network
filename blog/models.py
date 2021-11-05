@@ -2,11 +2,8 @@ from django.db import models
 
 from django.utils.translation import gettext_lazy as _
 from taggit.managers import TaggableManager
-import uuid
 from django.utils import timezone
 from django.conf import settings
-
-from . import utils
 
 
 class Post(models.Model):
@@ -15,7 +12,7 @@ class Post(models.Model):
     title = models.CharField(max_length=256, verbose_name=_('title'))
     image = models.ImageField(blank=True, null=True, upload_to='post_images/', verbose_name=_('image'))
     file = models.FileField(blank=True, null=True, verbose_name=_('File'))
-    slug = models.SlugField(null=True, blank=True, allow_unicode=True, verbose_name=_('slug'))
+    slug = models.SlugField(max_length=100, null=True, blank=True, allow_unicode=True, verbose_name=_('slug'))
     content = models.TextField(verbose_name=_('content'))
     date_created = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('date created'))
     date_edited = models.DateTimeField(auto_now=True, editable=False, verbose_name=_('date edited'))
@@ -23,55 +20,20 @@ class Post(models.Model):
     visits = models.ManyToManyField('IPAddress', related_name='posts_visited', verbose_name=_('views'),
                                     blank=True)
 
-    # def __init__(self, *args, **kwargs):
-    #     self.current_slug = self.slug if self.slug else None
-    #     super(Post, self).__init__(*args, **kwargs)
-
     class Meta:
         verbose_name = _('Post')
         verbose_name_plural = _('Posts')
         ordering = ('-date_created',)
 
-    def get_tags(self):
-        return self.post_tags.names()
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            # get the field we want to slugify based on that
-            indicator = self.title if self.title else (self.title, self.author)
-            exists, to_slug = utils.get_slug(self, indicator)
-            while exists:
-                exists, to_slug = utils.get_slug(self, indicator, uuid.uuid4())
-            self.slug = self.current_slug = to_slug
-            self.save()
-        super().save(*args, *kwargs)
-
-    # def toggle_like(self, request):
-    #     from .signals import post_like
-    #
-    #     profile = request.user.profile
-    #     is_liked = not self.is_liked(profile)
-    #
-    #     if is_liked:
-    #         self._like(request)
-    #     else:
-    #         self._unlike()
-    #
-    #     self.refresh_from_db()
-    #     post_like.send(sender=self.__class__, instance=self, profile=profile, state=is_liked)
-
-    # def _like(self, request):
-    #     self.likes_count = F('likes_count') + 1
-    #     self.like_timestamp = str(datetime.now(tz=timezone.utc)) + str(request.user)
-    #     self.save()
-
-    # def _unlike(self):
-    #     self.likes_count = F('likes_count') - 1
-    #     # del self.like_timestamp
-    #     self.save()
+    def __init__(self, *args, **kwargs):
+        super(Post, self).__init__(*args, **kwargs)
+        self.current_title = self.title
 
     def __str__(self):
         return f'{self.title}'
+
+    def get_tags(self):
+        return self.post_tags.names()
 
 
 class LikeManager(models.Manager):

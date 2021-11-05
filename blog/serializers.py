@@ -17,13 +17,11 @@ class PostSerializer(serializers.ModelSerializer):
     author = serializers.ReadOnlyField(source='author.profile.uid')
     visits = serializers.SerializerMethodField(method_name='num_visits')
     likes = serializers.SerializerMethodField(method_name='num_likes')
-    post_tags = Tags(source='get_tags')
+    post_tags = Tags(source='get_tags', required=False)
 
     class Meta:
         model = Post
         fields = (
-            'id',
-            'author_id',
             'author',
             'title',
             'content',
@@ -41,13 +39,10 @@ class PostSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         tags = validated_data.pop('get_tags', None)
-        instance = Post.objects.create(**validated_data)
+        instance = super(PostSerializer, self).create(validated_data)
         if tags is not None:
             instance.post_tags.add(tags)
         return instance
-
-    def update(self, instance, validated_data):
-        return super(PostSerializer, self).update(instance, validated_data)
 
     def num_visits(self, obj):
         return obj.visits.count()
