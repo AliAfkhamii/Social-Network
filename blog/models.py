@@ -96,10 +96,10 @@ class Comment(models.Model):
                                verbose_name=_('replied to'))
 
     def __str__(self):
-        if self.parent:
-            return f'{self.parent} --- {self.text[:20]}'
+        if self.parent is not None:
+            return f'{self.post}--{self.text[:10]}(reply)'
 
-        return f'{self.post}-{self.text[:20]}'
+        return f'{self.post}--{self.text[:10]}'
 
 
 class IPAddress(models.Model):

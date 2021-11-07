@@ -8,13 +8,11 @@ from .models import User, Profile
 #     password = serializers.CharField()
 
 
-# class UserSerializers(serializers.ModelSerializer):
-#     class Meta:
-#         model = User
-#         fields = (
-#
-#         )
-#
+class UserSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = '__all__'
+
 #
 # class ProfileSerializer(serializers.ModelSerializer):
 #     user = UserSerializers(read_only=True)

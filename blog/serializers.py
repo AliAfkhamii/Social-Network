@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ParseError
 
-from .models import Post, Like
+from .models import Post, Like, Comment
 from accounts.models import Profile
 
 
@@ -13,29 +13,40 @@ class Tags(serializers.Field):
         return value
 
 
-class PostSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.profile.uid')
+class PostSerializer(serializers.HyperlinkedModelSerializer):
+    # author = serializers.ReadOnlyField(source='author.profile.uid')
     visits = serializers.SerializerMethodField(method_name='num_visits')
     likes = serializers.SerializerMethodField(method_name='num_likes')
+
     post_tags = Tags(source='get_tags', required=False)
+
+    # url = serializers.HyperlinkedIdentityField(view_name='blog:posts-detail')
 
     class Meta:
         model = Post
         fields = (
-            'author',
+            'url',
+            # 'author',
             'title',
             'content',
             'image',
             'file',
-            'slug',
+            # 'slug',
             'visits',
             'likes',
             'post_tags',
             'date_created',
             'date_edited',
+            'comments',
         )
-        read_only_fields = ('slug', 'visits', 'likes',)
+        read_only_fields = ('slug', 'visits', 'likes', 'author',)
         optional_fields = ('image', 'file', 'post_tags',)
+        extra_kwargs = {
+            'url': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'},
+            'comments': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
+            # 'author': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'}
+
+        }
 
     def create(self, validated_data):
         tags = validated_data.pop('get_tags', None)
@@ -78,3 +89,40 @@ class LikeSerializer(serializers.ModelSerializer):
             'value',
         )
         read_only_fields = ('created',)
+
+
+class CommentListSerializer(serializers.HyperlinkedModelSerializer):
+
+    class Meta:
+        model = Comment
+        fields = (
+            "url",
+            "post",
+            "text",
+            "created",
+            "parent",
+        )
+        # # extra_kwargs = {"parent": {"source": "parent.id"}}
+        extra_kwargs = {
+            'url': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': 'pk'},
+            'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
+            'parent': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
+        }
+
+
+class CommentRetrieveSerializer(serializers.HyperlinkedModelSerializer):
+
+    class Meta:
+        model = Comment
+        fields = (
+            "post",
+            "text",
+            "created",
+            "parent",
+            "replies",
+        )
+        extra_kwargs = {
+            'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
+            'parent': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
+            'replies': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
+        }
