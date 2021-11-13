@@ -3,11 +3,12 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from taggit.managers import TaggableManager
 from django.utils import timezone
-from django.conf import settings
+
+from accounts.models import User
 
 
 class Post(models.Model):
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='posts',
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts',
                                verbose_name=_('author'))
     title = models.CharField(max_length=256, verbose_name=_('title'))
     image = models.ImageField(blank=True, null=True, upload_to='post_images/', verbose_name=_('image'))
@@ -34,6 +35,9 @@ class Post(models.Model):
 
     def get_tags(self):
         return self.post_tags.names()
+
+    def pinned_comments(self):
+        return self.comments.filter(pinned=True)[:3]
 
 
 class LikeManager(models.Manager):
@@ -89,11 +93,17 @@ class Like(models.Model):
 
 
 class Comment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET('from a deleted user'), verbose_name=_('user'))
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='comments', verbose_name=_('post'))
     text = models.TextField(null=True, verbose_name=_('text'))
     created = models.DateTimeField(auto_now_add=True, null=True, verbose_name=_('date created'))
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies',
                                verbose_name=_('replied to'))
+    pinned = models.BooleanField(verbose_name=_('pinned'), default=False)
+
+    @property
+    def is_pinned(self):
+        return self.pinned
 
     def __str__(self):
         if self.parent is not None:

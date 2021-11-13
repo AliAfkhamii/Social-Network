@@ -1,4 +1,7 @@
-from rest_framework.generics import get_object_or_404, GenericAPIView, ListAPIView, RetrieveDestroyAPIView, ListCreateAPIView
+from rest_framework.generics import (
+    RetrieveDestroyAPIView, ListCreateAPIView, CreateAPIView
+)
+
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -14,6 +17,7 @@ class PostViewSet(ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
     lookup_field = 'slug'
+
     # permission_classes = (IsAuthenticated,)
 
     def perform_create(self, serializer):
@@ -32,14 +36,25 @@ class PostViewSet(ModelViewSet):
 class CommentList(ListCreateAPIView):
     serializer_class = CommentListSerializer
     permission_classes = (AllowAny,)
+
     # lookup_field = 'pk'
 
     def get_queryset(self):
         return Comment.objects.filter(post__slug=self.kwargs.get('slug'))
 
 
-class CommentDetailDestroy(RetrieveDestroyAPIView):
+class CommentDetailDestroy(RetrieveDestroyAPIView, CreateAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentRetrieveSerializer
     permission_classes = (AllowAny,)
     lookup_field = "pk"
+    lookup_url_kwarg = "pk"
+
+    def perform_create(self, serializer):
+        comment = self.get_object()
+        other_fields = {
+            'user': self.request.user,
+            'post': comment.post,
+            'parent': comment,
+        }
+        serializer.save(**other_fields)

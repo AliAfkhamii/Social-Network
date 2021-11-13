@@ -20,7 +20,11 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
 
     post_tags = Tags(source='get_tags', required=False)
 
-    # url = serializers.HyperlinkedIdentityField(view_name='blog:posts-detail')
+    pinned_comments = serializers.HyperlinkedRelatedField(
+        many=True,
+        read_only=True,
+        view_name='blog:comment-detail-destroy'
+    )
 
     class Meta:
         model = Post
@@ -37,13 +41,12 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'post_tags',
             'date_created',
             'date_edited',
-            'comments',
+            'pinned_comments',
         )
         read_only_fields = ('slug', 'visits', 'likes', 'author',)
         optional_fields = ('image', 'file', 'post_tags',)
         extra_kwargs = {
             'url': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'},
-            'comments': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
             # 'author': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'}
 
         }
@@ -92,7 +95,6 @@ class LikeSerializer(serializers.ModelSerializer):
 
 
 class CommentListSerializer(serializers.HyperlinkedModelSerializer):
-
     class Meta:
         model = Comment
         fields = (
@@ -101,6 +103,7 @@ class CommentListSerializer(serializers.HyperlinkedModelSerializer):
             "text",
             "created",
             "parent",
+            "is_pinned"
         )
         # # extra_kwargs = {"parent": {"source": "parent.id"}}
         extra_kwargs = {
@@ -108,21 +111,28 @@ class CommentListSerializer(serializers.HyperlinkedModelSerializer):
             'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
             'parent': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
         }
+        read_only_fields = ('parent',)
 
 
 class CommentRetrieveSerializer(serializers.HyperlinkedModelSerializer):
+    user = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
         model = Comment
         fields = (
+            "user",
             "post",
             "text",
             "created",
             "parent",
             "replies",
+            "is_pinned",
         )
         extra_kwargs = {
             'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
             'parent': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
             'replies': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
         }
+        read_only_fields = (
+            'post', 'created', 'parent', 'replies', 'is_pinned'
+        )
