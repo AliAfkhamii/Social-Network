@@ -4,11 +4,11 @@ from django.utils.translation import gettext_lazy as _
 from taggit.managers import TaggableManager
 from django.utils import timezone
 
-from accounts.models import User
+from accounts.models import Profile
 
 
 class Post(models.Model):
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts',
+    author = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='posts',
                                verbose_name=_('author'))
     title = models.CharField(max_length=256, verbose_name=_('title'))
     image = models.ImageField(blank=True, null=True, upload_to='post_images/', verbose_name=_('image'))
@@ -61,7 +61,7 @@ class Like(models.Model):
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='likes',
                              verbose_name=_('post'))
 
-    profile = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name='likes_given',
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='likes_given',
                                 verbose_name=_('profile liked'))
 
     created = models.DateTimeField(default=timezone.now, verbose_name=_('date created'))
@@ -93,7 +93,7 @@ class Like(models.Model):
 
 
 class Comment(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET('from a deleted user'), verbose_name=_('user'))
+    user = models.ForeignKey(Profile, on_delete=models.SET('from a deleted user'), verbose_name=_('user'))
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='comments', verbose_name=_('post'))
     text = models.TextField(null=True, verbose_name=_('text'))
     created = models.DateTimeField(auto_now_add=True, null=True, verbose_name=_('date created'))

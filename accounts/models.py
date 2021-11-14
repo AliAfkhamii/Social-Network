@@ -126,10 +126,10 @@ class Relation(models.Model):
         REQUESTED = 'req', 'requested'
         ACCEPTED = 'acc', 'accepted'
 
-    follower = models.ForeignKey('profile', on_delete=models.CASCADE, related_name='followings',
+    follower = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='followings',
                                  verbose_name=_('follower'))
 
-    account = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name='followers',
+    account = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='followers',
                                 verbose_name=_('account'))
 
     state = models.CharField(_('state'), max_length=3, null=True, choices=RelationState.choices)

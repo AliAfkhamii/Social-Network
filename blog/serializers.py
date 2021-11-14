@@ -95,10 +95,13 @@ class LikeSerializer(serializers.ModelSerializer):
 
 
 class CommentListSerializer(serializers.HyperlinkedModelSerializer):
+    user = serializers.CharField(source='user.user.username', read_only=True)
+
     class Meta:
         model = Comment
         fields = (
             "url",
+            "user",
             "post",
             "text",
             "created",
@@ -111,11 +114,11 @@ class CommentListSerializer(serializers.HyperlinkedModelSerializer):
             'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
             'parent': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
         }
-        read_only_fields = ('parent',)
+        read_only_fields = ('parent', 'post',)
 
 
 class CommentRetrieveSerializer(serializers.HyperlinkedModelSerializer):
-    user = serializers.CharField(source='user.username', read_only=True)
+    user = serializers.CharField(source='user.user.username', read_only=True)
 
     class Meta:
         model = Comment
