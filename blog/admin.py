@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import (Post, Like, Comment, IPAddress)
+from .models import (Post, Vote, Comment, IPAddress)
 
 
 @admin.register(Post)
@@ -8,8 +8,8 @@ class PostAdmin(admin.ModelAdmin):
     pass
 
 
-@admin.register(Like)
-class LikeAdmin(admin.ModelAdmin):
+@admin.register(Vote)
+class VoteAdmin(admin.ModelAdmin):
     pass
 
 

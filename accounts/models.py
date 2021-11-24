@@ -96,8 +96,8 @@ class Profile(models.Model):
         return f'{self.user} user profile'
 
     @property
-    def likes(self):
-        return self.likes_given.all()
+    def votes(self):
+        return self.votes_given.all()
 
     @property
     def is_private(self):

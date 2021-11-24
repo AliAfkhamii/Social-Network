@@ -40,17 +40,19 @@ class Post(models.Model):
         return self.comments.filter(pinned=True)[:3]
 
 
-class LikeManager(models.Manager):
-    def total_star_related_to_post(self, post_id):
+class VoteManager(models.Manager):
+    def total_stars_related_to_post(self, post):
         from functools import reduce
         from operator import add
-        related_post = Post.objects.get(id=post_id)
-        stars_list = self.filter(post=related_post).values_list('value', flat=True)
-        total = reduce(add, stars_list)
-        return total
+        stars_list = self.filter(post=post).values_list('value', flat=True)
+        if stars_list:
+            total = reduce(add, stars_list)
+            return total / len(stars_list)
+
+        return 0
 
 
-class Like(models.Model):
+class Vote(models.Model):
     class StarChoices(models.IntegerChoices):
         VERY_BAD = 1, 'VERY_BAD'
         BAD = 2, 'BAD'
@@ -58,38 +60,39 @@ class Like(models.Model):
         GOOD = 4, 'GOOD'
         PERFECT = 5, 'PERFECT'
 
-    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='likes',
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='votes',
                              verbose_name=_('post'))
 
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='likes_given',
-                                verbose_name=_('profile liked'))
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='votes_given',
+                                verbose_name=_('profile voted'))
 
     created = models.DateTimeField(default=timezone.now, verbose_name=_('date created'))
+    updated = models.DateTimeField(auto_now_add=True, verbose_name=_('date updated'))
     value = models.IntegerField(choices=StarChoices.choices, null=True, verbose_name=_('star'))
-    objects = LikeManager()
+    objects = VoteManager()
 
     class Meta:
-        verbose_name = _('Like')
-        verbose_name_plural = _('Likes')
+        verbose_name = _('Vote')
+        verbose_name_plural = _('Votes')
         unique_together = (('post', 'profile'),)
 
     def __str__(self):
         return f"{self.profile} --> {self.post} | {self.value}"
 
-    @classmethod
-    def toggle(cls, post, profile, star=None):
-        try:
-            like = cls.objects.get(post=post, profile=profile)
-            if star:
-                like.value = star
-                like.save()
-            else:
-                like.delete()
-        except Like.DoesNotExist:
-            obj = cls.objects.create(
-                post=post, profile=profile, value=star
-            )
-            return obj
+    # @classmethod
+    # def toggle(cls, post, profile, star=None):
+    #     try:
+    #         vote = cls.objects.get(post=post, profile=profile)
+    #         if star:
+    #             vote.value = star
+    #             vote.save()
+    #         else:
+    #             vote.delete()
+    #     except cls.DoesNotExist:
+    #         obj = cls.objects.create(
+    #             post=post, profile=profile, value=star
+    #         )
+    #         return obj
 
 
 class Comment(models.Model):

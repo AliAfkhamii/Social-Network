@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ParseError
 
-from .models import Post, Like, Comment
+from .models import Post, Vote, Comment
 from accounts.models import Profile
 
 
@@ -14,30 +14,30 @@ class Tags(serializers.Field):
 
 
 class PostSerializer(serializers.HyperlinkedModelSerializer):
-    # author = serializers.ReadOnlyField(source='author.profile.uid')
+    author = serializers.ReadOnlyField(source='author.user.username')
     visits = serializers.SerializerMethodField(method_name='num_visits')
-    likes = serializers.SerializerMethodField(method_name='num_likes')
+    stars = serializers.SerializerMethodField(method_name='votes')
 
     post_tags = Tags(source='get_tags', required=False)
 
     pinned_comments = serializers.HyperlinkedRelatedField(
         many=True,
         read_only=True,
-        view_name='blog:comment-detail-destroy'
+        view_name='blog:comment-detail'
     )
 
     class Meta:
         model = Post
         fields = (
             'url',
-            # 'author',
+            'author',
             'title',
             'content',
             'image',
             'file',
             # 'slug',
             'visits',
-            'likes',
+            'stars',
             'post_tags',
             'date_created',
             'date_edited',
@@ -55,43 +55,45 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
         tags = validated_data.pop('get_tags', None)
         instance = super(PostSerializer, self).create(validated_data)
         if tags is not None:
-            instance.post_tags.add(tags)
+            instance.post_tags.add(*tags)
         return instance
 
     def num_visits(self, obj):
         return obj.visits.count()
 
-    def num_likes(self, obj):
-        return obj.likes.count()
+    def votes(self, obj):
+        return Vote.objects.total_stars_related_to_post(obj)
 
 
 class ProfileLikeSerializer(serializers.ModelSerializer):
-    user = serializers.CharField(source='user.username')
+    username = serializers.CharField(source='user.username')
 
     class Meta:
         model = Profile
         fields = (
-            'id',
-            'user',
+            'username',
             'picture',
             'bio',
         )
 
 
-class LikeSerializer(serializers.ModelSerializer):
-    profile = ProfileLikeSerializer(required=False)
-    value = serializers.ChoiceField(choices=Like.StarChoices)
+class VoteSerializer(serializers.HyperlinkedModelSerializer):
+    profile = ProfileLikeSerializer(read_only=True)
+    value = serializers.ChoiceField(choices=Vote.StarChoices)
+    url = serializers.HyperlinkedIdentityField(view_name='blog:vote-detail')
 
     class Meta:
-        model = Like
+        model = Vote
         fields = (
-            'id',
+            'url',
             'post',
             'profile',
             'created',
+            'updated',
             'value',
         )
-        read_only_fields = ('created',)
+        read_only_fields = ('created', 'updated', 'post', 'profile')
+        extra_kwargs = {'post': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'}, }
 
 
 class CommentListSerializer(serializers.HyperlinkedModelSerializer):
@@ -108,11 +110,10 @@ class CommentListSerializer(serializers.HyperlinkedModelSerializer):
             "parent",
             "is_pinned"
         )
-        # # extra_kwargs = {"parent": {"source": "parent.id"}}
         extra_kwargs = {
-            'url': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': 'pk'},
+            'url': {'view_name': 'blog:comment-detail', 'lookup_field': 'pk'},
             'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
-            'parent': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
+            'parent': {'view_name': 'blog:comment-detail', 'lookup_field': "pk"},
         }
         read_only_fields = ('parent', 'post',)
 
@@ -133,8 +134,8 @@ class CommentRetrieveSerializer(serializers.HyperlinkedModelSerializer):
         )
         extra_kwargs = {
             'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
-            'parent': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
-            'replies': {'view_name': 'blog:comment-detail-destroy', 'lookup_field': "pk"},
+            'parent': {'view_name': 'blog:comment-detail', 'lookup_field': "pk"},
+            'replies': {'view_name': 'blog:comment-detail', 'lookup_field': "pk"},
         }
         read_only_fields = (
             'post', 'created', 'parent', 'replies', 'is_pinned'
