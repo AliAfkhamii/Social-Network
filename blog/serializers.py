@@ -1,24 +1,17 @@
 from rest_framework import serializers
-from rest_framework.exceptions import ParseError
+from taggit_serializer.serializers import (TagListSerializerField,
+                                           TaggitSerializer)
 
 from .models import Post, Vote, Comment
 from accounts.models import Profile
 
 
-class Tags(serializers.Field):
-    def to_internal_value(self, data):
-        return data
-
-    def to_representation(self, value):
-        return value
-
-
-class PostSerializer(serializers.HyperlinkedModelSerializer):
+class PostSerializer(TaggitSerializer, serializers.HyperlinkedModelSerializer):
     author = serializers.ReadOnlyField(source='author.user.username')
     visits = serializers.SerializerMethodField(method_name='num_visits')
     stars = serializers.SerializerMethodField(method_name='votes')
 
-    post_tags = Tags(source='get_tags', required=False)
+    post_tags = TagListSerializerField(help_text="the format must be a \"list\" of tags")
 
     pinned_comments = serializers.HyperlinkedRelatedField(
         many=True,
@@ -48,15 +41,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
         extra_kwargs = {
             'url': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'},
             # 'author': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'}
-
         }
-
-    def create(self, validated_data):
-        tags = validated_data.pop('get_tags', None)
-        instance = super(PostSerializer, self).create(validated_data)
-        if tags is not None:
-            instance.post_tags.add(*tags)
-        return instance
 
     def num_visits(self, obj):
         return obj.visits.count()

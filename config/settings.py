@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     # third-party apps
     'taggit',
+    'taggit_serializer',
     'rest_framework',
     'rest_framework.authtoken',
     'drf_yasg',
