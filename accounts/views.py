@@ -152,8 +152,8 @@ class ProfileViewSet(RetrieveModelMixin,
 
     @action(methods=('post',), detail=False, serializer_class=UserRegistrationSerializer)
     def register(self, request):
-        # if request.user.is_authenticated:
-        #     raise PermissionDenied(f'{request.user} has already registered')
+        if request.user.is_authenticated:
+            raise PermissionDenied(f'{request.user} has already registered')
 
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
