@@ -3,11 +3,10 @@ from taggit_serializer.serializers import (TagListSerializerField,
                                            TaggitSerializer)
 
 from .models import Post, Vote, Comment
-from accounts.models import Profile
+from accounts.serializers import ProfileSerializer
 
 
 class PostSerializer(TaggitSerializer, serializers.HyperlinkedModelSerializer):
-    author = serializers.ReadOnlyField(source='author.user.username')
     visits = serializers.SerializerMethodField(method_name='num_visits')
     stars = serializers.SerializerMethodField(method_name='votes')
 
@@ -18,12 +17,14 @@ class PostSerializer(TaggitSerializer, serializers.HyperlinkedModelSerializer):
         read_only=True,
         view_name='blog:comment-detail'
     )
+    author_name = serializers.CharField(source='author.user.username', read_only=True)
 
     class Meta:
         model = Post
         fields = (
             'url',
             'author',
+            'author_name',
             'title',
             'content',
             'image',
@@ -40,7 +41,7 @@ class PostSerializer(TaggitSerializer, serializers.HyperlinkedModelSerializer):
         optional_fields = ('image', 'file', 'post_tags',)
         extra_kwargs = {
             'url': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'},
-            # 'author': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'}
+            'author': {'view_name': 'accounts:profile-detail', 'lookup_field': 'uid'}
         }
 
     def num_visits(self, obj):
@@ -50,20 +51,8 @@ class PostSerializer(TaggitSerializer, serializers.HyperlinkedModelSerializer):
         return Vote.objects.total_stars_related_to_post(obj)
 
 
-class ProfileLikeSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username')
-
-    class Meta:
-        model = Profile
-        fields = (
-            'username',
-            'picture',
-            'bio',
-        )
-
-
 class VoteSerializer(serializers.HyperlinkedModelSerializer):
-    profile = ProfileLikeSerializer(read_only=True)
+    profile = ProfileSerializer(read_only=True)
     value = serializers.ChoiceField(choices=Vote.StarChoices)
     url = serializers.HyperlinkedIdentityField(view_name='blog:vote-detail')
 
@@ -80,6 +69,14 @@ class VoteSerializer(serializers.HyperlinkedModelSerializer):
         read_only_fields = ('created', 'updated', 'post', 'profile')
         extra_kwargs = {'post': {'view_name': 'blog:post-detail', 'lookup_field': 'slug'}, }
 
+    def create(self, validated_data):
+        post = Post.objects.get(slug=self.context.get('view').kwargs.get('slug'))
+        return Vote.toggle(
+            post=post,
+            profile=self.context.get('request').user.profile,
+            star=self.validated_data.get('value')
+        )
+
 
 class CommentListSerializer(serializers.HyperlinkedModelSerializer):
     user = serializers.CharField(source='user.user.username', read_only=True)
@@ -93,6 +90,7 @@ class CommentListSerializer(serializers.HyperlinkedModelSerializer):
             "text",
             "created",
             "parent",
+            "parent_id",
             "is_pinned"
         )
         extra_kwargs = {
@@ -100,7 +98,7 @@ class CommentListSerializer(serializers.HyperlinkedModelSerializer):
             'post': {'view_name': 'blog:post-detail', 'lookup_field': "slug"},
             'parent': {'view_name': 'blog:comment-detail', 'lookup_field': "pk"},
         }
-        read_only_fields = ('parent', 'post',)
+        read_only_fields = ('parent', 'post', 'parent_id')
 
 
 class CommentRetrieveSerializer(serializers.HyperlinkedModelSerializer):

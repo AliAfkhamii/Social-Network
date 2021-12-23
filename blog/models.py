@@ -79,20 +79,22 @@ class Vote(models.Model):
     def __str__(self):
         return f"{self.profile} --> {self.post} | {self.value}"
 
-    # @classmethod
-    # def toggle(cls, post, profile, star=None):
-    #     try:
-    #         vote = cls.objects.get(post=post, profile=profile)
-    #         if star:
-    #             vote.value = star
-    #             vote.save()
-    #         else:
-    #             vote.delete()
-    #     except cls.DoesNotExist:
-    #         obj = cls.objects.create(
-    #             post=post, profile=profile, value=star
-    #         )
-    #         return obj
+    @classmethod
+    def toggle(cls, post, profile, star=None):
+        try:
+            vote = cls.objects.get(post=post, profile=profile)
+            if star:
+                vote.value = star
+                vote.save()
+            else:
+                vote.delete()
+        except cls.DoesNotExist:
+            obj = cls.objects.create(
+                post=post, profile=profile, value=star
+            )
+            return obj
+
+        return vote
 
 
 class Comment(models.Model):

@@ -1,46 +1,51 @@
 from rest_framework.generics import (
-    RetrieveDestroyAPIView, ListCreateAPIView, CreateAPIView, ListAPIView
+    RetrieveDestroyAPIView, ListCreateAPIView, CreateAPIView, ListAPIView, get_object_or_404
 )
 
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
-from django.db.models import Q
 
+from accounts.models import Relation, Profile
 from .serializers import (
     PostSerializer, VoteSerializer, CommentListSerializer, CommentRetrieveSerializer
 )
 
 from .models import Post, Vote, Comment
-from .permissions import IsCommentAuthor, IsVoter, IsPostAuthor
+from .permissions import IsCommentAuthor, IsVoter, IsPublicOrFollowing, IsNotBlocked, IsPostAuthor
 
 
 class PostViewSet(ModelViewSet):
     serializer_class = PostSerializer
     lookup_field = 'slug'
-    permission_classes = (IsPostAuthor, IsAuthenticated,)
+    permission_classes = (IsAuthenticated, IsNotBlocked, IsPublicOrFollowing, IsPostAuthor,)
 
     def get_queryset(self):
-        user_followings = self.request.user.profile.followings.values_list('account', flat=True)
+        request_profile = self.request.user.profile
+        kwargs = self.kwargs.get
+        uid, slug = kwargs('uid', None), kwargs('slug', None)
 
-        return Post.objects.filter(
-            Q(author__private=False) | Q(author_id__in=user_followings)
-        ).distinct()
+        if not uid and not slug:
+            return request_profile.posts.all()
+
+        if uid:
+            return get_object_or_404(Profile, uid=uid).posts.all()
+
+        return Post.objects.all()
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user.profile)
 
-    def get_permissions(self):
-        if self.action == 'create':
-            return IsAuthenticated(),
-
-        return super(PostViewSet, self).get_permissions()
-
 
 class FeedAPIView(ListAPIView):
     serializer_class = PostSerializer
+    permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        user_followings = self.request.user.profile.followings.values_list('account', flat=True)
+        user_followings = self.request.user.profile.followings.filter(
+            state=Relation.RelationState.FOLLOWED
+        ).values_list('account', flat=True)
+
         return Post.objects.filter(author_id__in=user_followings)
 
 
@@ -65,6 +70,11 @@ class CommentList(ListCreateAPIView):
             post=post,
         )
 
+    def post(self, request, *args, **kwargs):
+        if self.kwargs.get('slug', None):
+            return self.create(request, *args, **kwargs)
+        return Response(data={'detail': '\'POST\' methods are not allowed'})
+
 
 class CommentDetailDestroy(RetrieveDestroyAPIView, CreateAPIView):
     queryset = Comment.objects.all()
@@ -83,32 +93,6 @@ class CommentDetailDestroy(RetrieveDestroyAPIView, CreateAPIView):
         serializer.save(**other_fields)
 
 
-# class VoteList(ListAPIView):
-#     serializer_class = VoteSerializer
-#
-#     def get_queryset(self):
-#         slug = self.kwargs.get('slug')
-#         return Vote.objects.filter(post__slug=slug)
-#
-#
-# class VoteCreateDetailDestroy(CreateAPIView, RetrieveDestroyAPIView):
-#     serializer_class = VoteSerializer
-#     lookup_field = "pk"
-#     lookup_url_kwarg = "pk"
-#     permission_classes = (IsVoter,)
-#
-#     def get_queryset(self):
-#         slug = self.kwargs.get('slug')
-#         return Vote.objects.filter(post__slug=slug)
-#
-#     def perform_create(self, serializer):
-#         vote = self.get_object()
-#         other_fields = {
-#             'profile': self.request.user.profile,
-#             'post': vote.post,
-#         }
-#         serializer.save(**other_fields)
-
 class VoteViewSet(ModelViewSet):
     serializer_class = VoteSerializer
     lookup_field = "pk"
@@ -119,11 +103,3 @@ class VoteViewSet(ModelViewSet):
         if slug := self.kwargs.get('slug'):
             return Vote.objects.filter(post__slug=slug)
         return Vote.objects.all()
-
-    def perform_create(self, serializer):
-        vote = self.get_object()
-        other_fields = {
-            'profile': self.request.user.profile,
-            'post': vote.post,
-        }
-        serializer.save(**other_fields)

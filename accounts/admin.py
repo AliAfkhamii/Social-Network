@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.utils.translation import gettext_lazy as _
 
 from django.contrib.auth import get_user_model
-from .models import Profile, Relation, Link
+from .models import Profile, Relation
 from .forms import *
 
 User = get_user_model()
@@ -28,14 +28,22 @@ class UserAdmin(DefaultUserAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    pass
+    list_display = ('id',
+                    'user',
+                    'uid',
+                    'website',
+                    'private',
+                    )
 
 
 @admin.register(Relation)
 class RelationAdmin(admin.ModelAdmin):
-    pass
+    list_display = (
+        "actor", "account", "state"
+    )
 
+    list_display_links = (
+        "actor", "account"
+    )
 
-@admin.register(Link)
-class LinkAdmin(admin.ModelAdmin):
-    pass
+    list_editable = ('state',)

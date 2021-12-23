@@ -1,15 +1,29 @@
+from django.db.models import Q
 from django.dispatch import receiver, Signal
 from django.db.models.signals import post_save, post_delete
 
-from .models import User, Profile
+from .models import User, Profile, Relation
 
-# profile_state_changed = Signal()
-#
-#
-# @receiver(profile_state_changed, sender=Profile)
-# def apply_public_state_to_relations(sender, instance, *args, **kwargs):
-#     for rel in instance.followers.all():
-#         rel.change_type()
+profile_state_changed = Signal()
+profile_blocked = Signal()
+
+
+@receiver(profile_state_changed, sender=Profile)
+def accept_requested_profiles_as_followed(sender, instance, *args, **kwargs):
+    requests = Relation.objects.filter(account=instance, state=Relation.RelationState.REQUESTED)
+    for relation in requests:
+        relation.state = Relation.RelationState.FOLLOWED
+        relation.save()
+
+
+@receiver(profile_blocked, sender=Relation)
+def terminate_reversed_relations(sender, instance, *args, **kwargs):
+    try:
+        rel = sender.objects.get(~Q(state=sender.RelationState.BLOCKED), actor=instance.account, account=instance.actor)
+    except sender.DoesNotExist:
+        return
+
+    rel._terminate_relation()
 
 
 @receiver(post_save, sender=User)

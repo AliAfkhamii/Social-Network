@@ -1,5 +1,5 @@
+from django.apps import apps
 from django.db import models
-from django.utils.functional import lazy
 
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
@@ -12,13 +12,16 @@ import uuid
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
-    def _create_user(self, email, username, password=None, **extra_fields):
+    def _create_user(self, email, username, password, **extra_fields):
         if not email:
             raise ValueError(_('user must have an email'))
         if not username:
             raise ValueError(_('username is required'))
+
+        GlobalUserModel = apps.get_model(self.model._meta.app_label, self.model._meta.object_name)
+        username = GlobalUserModel.normalize_username(username)
         email = self.normalize_email(email)
-        user = self.model(email=email, username=username, password=password, **extra_fields)
+        user = self.model(email=email, username=username, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -82,18 +85,17 @@ User = get_user_model()
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    picture = models.ImageField(default="default.png", upload_to='profile_pictures/', blank=True,
+    picture = models.ImageField(default="profile_pictures/default.jpg", upload_to='profile_pictures/', blank=True,
                                 verbose_name=_('profile picture'))
 
     bio = models.CharField(max_length=100, default="", blank=True, verbose_name=_('bio'))
 
-    links = models.ManyToManyField('Link', related_name='profiles', blank=True,
-                                   verbose_name=_('links'))
+    website = models.URLField(verbose_name=_('Website'), default='', blank=True)
     private = models.BooleanField(default=False)
     uid = models.UUIDField(default=uuid.uuid4, unique=True, blank=True, verbose_name=_('unique id'))
 
     def __str__(self):
-        return f'{self.user} user profile'
+        return f'{self.user}'
 
     @property
     def votes(self):
@@ -104,13 +106,28 @@ class Profile(models.Model):
         return self.private
 
     def follow_requests(self):
-        return self.followers.filter(state=Relation.RelationState.REQUESTED)
+        pks = self.followers.filter(state=Relation.RelationState.REQUESTED).values_list('actor', flat=True)
+        return self.__class__.objects.filter(pk__in=pks)
+
+    def profile_followers(self):
+        pks = self.followers.filter(state=Relation.RelationState.FOLLOWED).values_list('actor', flat=True)
+        return self.__class__.objects.filter(pk__in=pks)
+
+    def profile_followings(self):
+        pks = self.followings.filter(state=Relation.RelationState.FOLLOWED).values_list('account', flat=True)
+        return self.__class__.objects.filter(pk__in=pks)
 
     def block_list(self):
-        return self.followers.filter(state=Relation.RelationState.BLOCKED)
+        return self.followings.filter(state=Relation.RelationState.BLOCKED).values_list('account', flat=True)
+
+    def blocked_users(self):
+        return self.__class__.objects.filter(pk__in=self.block_list())
 
     def change_state(self):
-        # profile_state_changed.send(sender=self.__class__, instance=self)
+        from accounts.signals import profile_state_changed
+        if self.is_private:
+            profile_state_changed.send(sender=self.__class__, instance=self)
+
         self.private = not self.private
         self.save()
 
@@ -121,64 +138,68 @@ class Profile(models.Model):
 
 class Relation(models.Model):
     class RelationState(models.TextChoices):
-        FOLLOWED = 'flw', 'followed'
-        BLOCKED = 'blc', 'blocked'
-        REQUESTED = 'req', 'requested'
-        ACCEPTED = 'acc', 'accepted'
+        FOLLOWED = 'FLW', 'FOLLOWED'
+        BLOCKED = 'BLC', 'BLOCKED'
+        REQUESTED = 'REQ', 'REQUESTED'
 
-    follower = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='followings',
-                                 verbose_name=_('follower'))
+    actor = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='followings',
+                              verbose_name=_('actor'))
 
     account = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='followers',
                                 verbose_name=_('account'))
 
-    state = models.CharField(_('state'), max_length=3, null=True, choices=RelationState.choices)
+    state = models.CharField(_('state'), max_length=3, choices=RelationState.choices)
 
     created = models.DateTimeField(auto_now_add=True, verbose_name=_('created'))
 
     def __str__(self):
-        return f"{self.follower}-->{self.account} - {self.state}"
+        return f"{self.state}"
 
     def _terminate_relation(self):
-        self.state = None  # or self.delete()
+        self.delete()
 
-    def request(self):
+    def _request(self):
         self.state = self.RelationState.REQUESTED
         self.save()
 
     def decline(self):
         self._terminate_relation()
+        return f"{self.actor}'s request declined"
 
     def accept(self):
-        self.state = self.RelationState.ACCEPTED
+        self.state = self.RelationState.FOLLOWED
         self.save()
+        return f"{self.actor}'s request accepted"
 
     def follow(self):
-        if self.state is None:
+        if self.account.is_private:
+            self._request()
+            return f"request sent to {self.account}"
+        else:
             self.state = self.RelationState.FOLLOWED
+            self.save()
+            return f"{self.account} followed"
 
     def unfollow(self):
         self._terminate_relation()
+        return f"{self.account} unfollowed"
 
     def block(self):
+        from .signals import profile_blocked
         self.state = self.RelationState.BLOCKED
+        self.save()
+        profile_blocked.send(sender=self.__class__, instance=self)
+        return f"{self.account} blocked"
 
     def unblock(self):
         self._terminate_relation()
+        return f"{self.account} unblocked"
+
+    def undo_req(self):
+        self._terminate_relation()
+        return f"follow request to {self.account} is undone"
 
     class Meta:
         verbose_name = _('Relation')
         verbose_name_plural = _('Relations')
-        unique_together = (('follower', 'account'),)
-
-
-class Link(models.Model):
-    name = models.CharField(max_length=50, default='link', blank=True, verbose_name=_('link name'))
-    url = models.URLField(verbose_name=_('url'))
-
-    def __str__(self):
-        return f"{self.name}"
-
-    class Meta:
-        verbose_name = _('Link')
-        verbose_name_plural = _('Links')
+        unique_together = (('actor', 'account'),)

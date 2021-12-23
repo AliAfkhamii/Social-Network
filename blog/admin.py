@@ -5,7 +5,7 @@ from .models import (Post, Vote, Comment, IPAddress)
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    pass
+    list_display = list_filter = ('author', 'title',)
 
 
 @admin.register(Vote)
