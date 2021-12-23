@@ -1,25 +1,52 @@
+import rest_framework.exceptions
 from rest_framework import serializers
 
 from blog.models import Post
 from .models import User, Profile, Relation
 
 
+class UserRegistrationSerializer(serializers.HyperlinkedModelSerializer):
+    password2 = serializers.CharField(write_only=True, label='confirm password', style={'input_type': 'password'})
+
+    class Meta:
+        model = User
+        fields = ('email', 'username', 'password', 'password2', 'first_name', 'last_name',)
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def validate_email(self, val):
+        if self.Meta.model.objects.filter(email=val).exists():
+            raise rest_framework.exceptions.ValidationError("user with this email address already exists")
+        return val
+
+    def validate(self, data):
+        p1 = data.get('password')
+        p2 = data.pop('password2')   # pops password2 here for validations, before it gets included to validated data.
+        if not p1 or not p2 or p1 != p2:
+            raise rest_framework.exceptions.ValidationError("passwords must match")
+
+        return data
+
+    def save(self, **kwargs):
+        password = self.validated_data.pop('password')
+
+        user = super(UserRegistrationSerializer, self).save(**kwargs)
+        user.set_password(password)
+
+        return user
+
+
 class UserOwnerSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        exclude = (
-            "id",
-            "password",
+        exclude = ("password", "user_permissions", "groups", "id", "is_active", "is_staff", "is_superuser",)
+        read_only_fields = (
+            "email",
             "last_login",
-            "is_superuser",
-            "is_active",
-            "is_staff",
-            "groups",
-            "user_permissions",
+            "date_joined",
         )
 
 
-class UserCreationSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
@@ -34,15 +61,9 @@ class UserCreationSerializer(serializers.ModelSerializer):
             "phone": {'write_only': True}
         }
 
-    def validate_username(self, value):
-        if not value:
-            return self.context.get('request').user.username
-
-        return value
-
 
 class ProfileSerializer(serializers.HyperlinkedModelSerializer):
-    user = UserCreationSerializer(required=False)
+    user = UserSerializer(read_only=True)
     relation = serializers.SerializerMethodField(method_name='get_state')
     num_posts = serializers.SerializerMethodField(method_name='get_num_posts')
 

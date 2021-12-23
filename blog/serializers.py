@@ -2,6 +2,7 @@ from rest_framework import serializers
 from taggit_serializer.serializers import (TagListSerializerField,
                                            TaggitSerializer)
 
+from accounts.models import Profile
 from .models import Post, Vote, Comment
 from accounts.serializers import ProfileSerializer
 
@@ -51,8 +52,17 @@ class PostSerializer(TaggitSerializer, serializers.HyperlinkedModelSerializer):
         return Vote.objects.total_stars_related_to_post(obj)
 
 
+class VoteProfileSerializer(serializers.HyperlinkedModelSerializer):
+    username = serializers.CharField(source='user.username')
+
+    class Meta:
+        model = Profile
+        fields = ('username', 'url',)
+        extra_kwargs = {"url": {"view_name": "accounts:profile-detail", "lookup_field": "uid", }}
+
+
 class VoteSerializer(serializers.HyperlinkedModelSerializer):
-    profile = ProfileSerializer(read_only=True)
+    profile = VoteProfileSerializer(read_only=True)
     value = serializers.ChoiceField(choices=Vote.StarChoices)
     url = serializers.HyperlinkedIdentityField(view_name='blog:vote-detail')
 

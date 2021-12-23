@@ -139,6 +139,28 @@ class ProfileViewSet(RetrieveModelMixin,
         serializer = self.get_serializer(instance=instance, context={'request': request})
         return Response(data=serializer.data, status=HTTP_200_OK)
 
+    @action(methods=('get', 'put'), detail=False, serializer_class=UserOwnerSerializer, url_path='settings')
+    def more_settings(self, request):
+        instance = request.user
+        if request.method == 'GET':
+            serializer = self.get_serializer(instance=instance, context={'request': request})
+            return Response(data=serializer.data, status=HTTP_200_OK)
+        elif request.method == 'PUT':
+            serializer = self.get_serializer(instance=instance, data=request.data, partial=True)
+            serializer.save()
+            return Response(serializer.data, status=HTTP_200_OK)
+
+    @action(methods=('post',), detail=False, serializer_class=UserRegistrationSerializer)
+    def register(self, request):
+        # if request.user.is_authenticated:
+        #     raise PermissionDenied(f'{request.user} has already registered')
+
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        data = {**serializer.data, **{'Token': f'{user.auth_token}'}}
+        return Response(data=data, status=HTTP_200_OK)
+
 
 @api_view(('POST',))
 def logout(request):

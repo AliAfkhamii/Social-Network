@@ -22,17 +22,6 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-
-
-@api_view()
-def test(request):
-    # for tag in request.user.profile.posts.values_list('post_tags', flat=True):
-    #
-    return Response(data={'tags': request.user.profile.posts.values_list('post_tags', flat=True)})
-
-
 api_paths = [
     path('blog/', include('blog.urls')),
     path('accounts/', include('accounts.urls')),
@@ -41,7 +30,6 @@ api_paths = [
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(api_paths)),
-    path('test/', test)
 ]
 
 staticfiles = static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
