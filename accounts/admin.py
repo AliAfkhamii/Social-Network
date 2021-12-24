@@ -30,10 +30,21 @@ class UserAdmin(DefaultUserAdmin):
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ('id',
                     'user',
+                    'email',
                     'uid',
                     'website',
                     'private',
                     )
+
+    list_display_links = ('id',
+                          'user',
+                          'email',
+                          'uid',
+                          'website',
+                          )
+
+    def email(self, obj):
+        return obj.user.email
 
 
 @admin.register(Relation)

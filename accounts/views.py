@@ -1,16 +1,17 @@
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.generics import get_object_or_404
+from rest_framework.generics import get_object_or_404, GenericAPIView
 from rest_framework.mixins import RetrieveModelMixin, DestroyModelMixin, ListModelMixin, UpdateModelMixin
 from rest_framework.views import Response
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.status import HTTP_200_OK, HTTP_403_FORBIDDEN
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .serializers import *
 from .permissions import IsProfileOwner
 
-profile_owner_actions = ('requests', 'followers', 'followings', 'block_list')
+profile_owner_actions = ('requests', 'followers', 'followings', 'block_list', 'more_settings')
 
 
 class ProfileViewSet(RetrieveModelMixin,
@@ -22,8 +23,6 @@ class ProfileViewSet(RetrieveModelMixin,
     serializer_class = ProfileSerializer
     lookup_field = "uid"
     lookup_url_kwarg = "uid"
-
-    # permission_classes = (IsAuthenticated & IsProfileOwner,)
 
     def get_permissions(self):
         if self.action not in profile_owner_actions:
@@ -150,19 +149,30 @@ class ProfileViewSet(RetrieveModelMixin,
             serializer.save()
             return Response(serializer.data, status=HTTP_200_OK)
 
-    @action(methods=('post',), detail=False, serializer_class=UserRegistrationSerializer)
-    def register(self, request):
+
+class RegisterAPIView(GenericAPIView):
+    permission_classes = ()
+    authentication_classes = ()
+
+    serializer_class = UserRegistrationSerializer
+
+    def post(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            raise PermissionDenied(f'{request.user} has already registered')
+            raise PermissionDenied(f'user has already registered')
 
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        data = {**serializer.data, **{'Token': f'{user.auth_token}'}}
+
+        token = get_tokens_for_user(user)
+        data = {**serializer.data, **token}
         return Response(data=data, status=HTTP_200_OK)
 
 
-@api_view(('POST',))
-def logout(request):
-    request.user.auth_token.delete()
-    return Response(data={'message': 'logged out successfully'})
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+
+    return {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }

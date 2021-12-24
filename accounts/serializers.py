@@ -31,7 +31,7 @@ class UserRegistrationSerializer(serializers.HyperlinkedModelSerializer):
 
         user = super(UserRegistrationSerializer, self).save(**kwargs)
         user.set_password(password)
-
+        user.save()
         return user
 
 
@@ -81,19 +81,7 @@ class ProfileSerializer(serializers.HyperlinkedModelSerializer):
         )
         extra_kwargs = {
             "url": {"view_name": "accounts:profile-detail", "lookup_field": "uid", },
-            "phone": {'write_only': True}
         }
-
-    def update(self, instance, validated_data):
-        user_serializer = validated_data.pop("user", None)
-        user = instance.user
-
-        for field in user_serializer.keys():
-            exec(f'user.{field} = user_serializer.get("{field}", instance.user.{field})')
-
-        user.save(update_fields=[*user_serializer.keys()])
-
-        return super(ProfileSerializer, self).update(instance, validated_data)
 
     def get_state(self, obj):
         try:

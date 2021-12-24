@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     'taggit',
     'taggit_serializer',
     'rest_framework',
-    'rest_framework.authtoken',
     'drf_yasg',
 ]
 
@@ -161,8 +160,9 @@ TAGGIT_CASE_INSENSITIVE = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # 'rest_framework.authentication.TokenAuthentication',
+        # 'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20

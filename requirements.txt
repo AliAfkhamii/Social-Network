@@ -9,7 +9,9 @@ Django==3.2.5
 django-cors-headers==3.4.0
 django-extensions==3.0.3
 django-taggit==1.5.1
+django-taggit-serializer==0.1.7
 djangorestframework==3.12.4
+djangorestframework-simplejwt==5.0.0
 drf-yasg==1.20.0
 idna==3.3
 inflection==0.5.1
@@ -26,9 +28,11 @@ pexpect==4.8.0
 pickleshare==0.7.5
 Pillow==8.3.2
 prompt-toolkit==3.0.20
+psycopg2==2.9.2
 ptyprocess==0.7.0
 pydot==1.4.1
 Pygments==2.10.0
+PyJWT==2.3.0
 pyparsing==2.4.7
 pytz==2020.1
 requests==2.26.0
