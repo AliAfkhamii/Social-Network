@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     # project apps
     'blog.apps.BlogConfig',
     'accounts.apps.AccountsConfig',
+    'analytics.apps.AnalyticsConfig',
     # third-party apps
     'taggit',
     'taggit_serializer',

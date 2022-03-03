@@ -1,10 +1,12 @@
 from django.db import models
+from django.db.models import Q
 
 from django.utils.translation import gettext_lazy as _
 from taggit.managers import TaggableManager
 from django.utils import timezone
 
 from accounts.models import Profile
+from analytics.models import ObjectLog, ContentType
 
 
 class Post(models.Model):
@@ -18,8 +20,6 @@ class Post(models.Model):
     date_created = models.DateTimeField(auto_now_add=True, editable=False, verbose_name=_('date created'))
     date_edited = models.DateTimeField(auto_now=True, editable=False, verbose_name=_('date edited'))
     post_tags = TaggableManager(blank=True, verbose_name=_('post tags'))
-    visits = models.ManyToManyField('IPAddress', related_name='posts_visited', verbose_name=_('views'),
-                                    blank=True)
 
     class Meta:
         verbose_name = _('Post')
@@ -33,11 +33,16 @@ class Post(models.Model):
     def __str__(self):
         return f'{self.title}'
 
+    @property
+    def visits(self):
+        c_type = ContentType.objects.get_for_model(self.__class__)
+        return ObjectLog.objects.filter(~Q(user=self.author.user), content_type=c_type.id, object_id=self.id).count()
+
     def get_tags(self):
         return self.post_tags.names()
 
     def pinned_comments(self):
-        return self.comments.filter(pinned=True)[:3]
+        return self.comments.filter(pinned=True)
 
 
 class VoteManager(models.Manager):
@@ -48,8 +53,8 @@ class VoteManager(models.Manager):
         if stars_list:
             total = reduce(add, stars_list)
             return total / len(stars_list)
-
-        return 0
+        else:
+            return 0
 
 
 class Vote(models.Model):
@@ -68,13 +73,14 @@ class Vote(models.Model):
 
     created = models.DateTimeField(default=timezone.now, verbose_name=_('date created'))
     updated = models.DateTimeField(auto_now_add=True, verbose_name=_('date updated'))
-    value = models.IntegerField(choices=StarChoices.choices, null=True, verbose_name=_('star'))
+    value = models.SmallIntegerField(choices=StarChoices.choices, null=True, blank=True, verbose_name=_('star'))
     objects = VoteManager()
 
     class Meta:
         verbose_name = _('Vote')
         verbose_name_plural = _('Votes')
         unique_together = (('post', 'profile'),)
+        ordering = ('created',)
 
     def __str__(self):
         return f"{self.profile} --> {self.post} | {self.value}"
@@ -110,15 +116,17 @@ class Comment(models.Model):
     def is_pinned(self):
         return self.pinned
 
+    def toggle_pin_Comment(self):
+        self.pinned = not self.pinned
+        self.save()
+
     def __str__(self):
         if self.parent is not None:
             return f'{self.post}--{self.text[:10]}(reply)'
 
         return f'{self.post}--{self.text[:10]}'
 
-
-class IPAddress(models.Model):
-    ip = models.GenericIPAddressField(blank=True, null=True, verbose_name=_('ip address'))
-
-    def __str__(self):
-        return self.ip
+    class Meta:
+        verbose_name = 'Comment'
+        verbose_name_plural = 'Comments'
+        ordering = ('created',)

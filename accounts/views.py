@@ -10,11 +10,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .serializers import *
 from .permissions import IsProfileOwner
+from analytics.mixins import ObjectHitMixin
 
 profile_owner_actions = ('requests', 'followers', 'followings', 'block_list', 'more_settings')
 
 
-class ProfileViewSet(RetrieveModelMixin,
+class ProfileViewSet(ObjectHitMixin, RetrieveModelMixin,
                      UpdateModelMixin,
                      DestroyModelMixin,
                      ListModelMixin,

@@ -1,4 +1,4 @@
-from django.dispatch import receiver
+from django.dispatch import receiver, Signal
 from django.db.models.signals import pre_save
 
 from .models import Post

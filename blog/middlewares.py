@@ -1,4 +1,4 @@
-from .models import IPAddress
+from analytics.models import IPAddress
 
 
 class IPAddressMiddleware:
@@ -13,8 +13,8 @@ class IPAddressMiddleware:
         else:
             ip = request.META.get('REMOTE_ADDR')
 
-        ip_address = IPAddress.objects.get_or_create(ip=ip)
-        request.user.ip_address = ip_address
+        ip_address, _ = IPAddress.objects.get_or_create(ip=ip)
+        request.ip_address = ip_address.ip
 
         response = self.get_response(request)
         return response
